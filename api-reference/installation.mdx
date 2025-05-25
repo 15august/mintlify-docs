@@ -1,0 +1,145 @@
+# Installation
+
+<Warning>
+  **Beta Version Notice**
+  
+  The ARCAID SDK is currently in beta. During this phase:
+  - We recommend regularly checking for updates as we release fixes and improvements
+  - Some features might be in development or subject to change
+  - If you encounter any issues, our development team is available for direct support in our [Telegram channel](https://t.me/arcaidxyz)
+</Warning>
+
+There are several ways to integrate the ARCAID SDK into your game. Choose the method that best fits your development workflow.
+
+## CDN Integration
+
+The simplest way to add the ARCAID SDK is through our CDN:
+
+```html
+<script src="https://cdn.arcaid.xyz/sdk/latest/arcaid-loader.js"></script>
+```
+
+<Tip>
+  For production environments, we recommend using a specific version instead of `latest` to ensure stability:
+  ```html
+  <script src="https://cdn.arcaid.xyz/sdk/1.0.0/arcaid-loader.js"></script>
+  ```
+</Tip>
+
+## TypeScript Usage
+
+For TypeScript projects, you can import the types directly:
+
+```typescript
+import type { 
+  ArcaidSDKInstance,
+  ArcaidUserState,
+  ArcaidPlayerResponse 
+} from '@arcaid/sdk';
+
+declare global {
+  interface Window {
+    Arcaid?: {
+      init: (config?: ArcaidClientInitConfig) => Promise<ArcaidSDKInstance>;
+    };
+  }
+}
+```
+
+## Initialization
+
+After adding the SDK to your project, initialize it in your game code:
+
+```typescript
+async function initializeArcaid() {
+  try {
+    // Initialize the SDK
+    const arcaid = await window.Arcaid.init();
+    
+    // Wait for the SDK to be ready
+    await arcaid.ready();
+    
+    console.log('ARCAID SDK initialized successfully');
+    return arcaid;
+  } catch (error) {
+    console.error('Failed to initialize ARCAID SDK:', error);
+    throw error;
+  }
+}
+```
+
+<CodeGroup>
+  ```typescript TypeScript
+  import type { ArcaidSDKInstance } from '@arcaid/sdk';
+
+  let arcaidSDK: ArcaidSDKInstance;
+
+  async function initGame() {
+    arcaidSDK = await window.Arcaid.init();
+    await arcaidSDK.ready();
+    // Your game initialization code here
+  }
+  ```
+
+  ```javascript JavaScript
+  let arcaidSDK;
+
+  async function initGame() {
+    arcaidSDK = await window.Arcaid.init();
+    await arcaidSDK.ready();
+    // Your game initialization code here
+  }
+  ```
+</CodeGroup>
+
+## Configuration Options
+
+While the SDK works out of the box without configuration, you can customize its behavior:
+
+```typescript
+const config = {
+  coreSdkUrl: 'https://custom-domain.com/sdk/core' // Optional: Override core SDK URL
+};
+
+const arcaid = await window.Arcaid.init(config);
+```
+
+<Accordion title="Available Configuration Options">
+  | Option | Type | Description | Default |
+  |--------|------|-------------|---------|
+  | `coreSdkUrl` | string | Custom URL for core SDK loading | CDN URL |
+</Accordion>
+
+## Verification
+
+To verify that the SDK is working correctly, you can check the authentication status:
+
+```typescript
+async function verifySDK(sdk: ArcaidSDKInstance) {
+  try {
+    const userState = await sdk.auth.getUserState();
+    console.log('SDK Verification:', {
+      isLoggedIn: userState.isLoggedIn,
+      userId: userState.userId,
+      username: userState.username
+    });
+  } catch (error) {
+    console.error('SDK Verification failed:', error);
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="play" href="/api-reference/quickstart">
+    Learn the basics of using the SDK
+  </Card>
+  <Card title="Authentication" icon="lock" href="/api-reference/authentication">
+    Implement user authentication
+  </Card>
+</CardGroup>
+
+<Note>
+  Need help with installation? Join our [Support Telegram](https://t.me/arcaidxyz) for assistance.
+</Note> 

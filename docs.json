@@ -31,13 +31,42 @@
         "tab": "Developer SDK",
         "groups": [
           {
-            "group": "API Documentation",
+            "group": "Getting Started",
             "pages": [
+              "api-reference/sdk-overview",
+              "api-reference/installation",
+              "api-reference/quickstart"
             ]
           },
           {
-            "group": "Endpoint Examples",
+            "group": "Core Concepts",
             "pages": [
+              "api-reference/authentication",
+              "api-reference/multiplayer",
+              "api-reference/payments",
+              "api-reference/wallet",
+              "api-reference/stats"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-reference/sdk-instance",
+              "api-reference/auth-module",
+              "api-reference/multiplayer-module",
+              "api-reference/payments-module",
+              "api-reference/wallet-module",
+              "api-reference/stats-module",
+              "api-reference/utils-module"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "api-reference/examples/authentication",
+              "api-reference/examples/multiplayer-room",
+              "api-reference/examples/payments",
+              "api-reference/examples/wallet-integration"
             ]
           }
         ]

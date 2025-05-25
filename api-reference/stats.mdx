@@ -1,0 +1,335 @@
+# Stats
+
+The stats module allows you to track game events and player statistics.
+
+<Warning>
+  **Beta Feature**
+  
+  The stats module is in beta and currently provides basic event tracking functionality. More features will be added based on developer feedback. Join our [Telegram](https://t.me/arcaidxyz) for direct support and updates.
+</Warning>
+
+## Event Tracking
+
+### Basic Event Tracking
+
+```typescript
+async function trackGameEvent(eventName: string, eventData?: Record<string, any>) {
+  try {
+    await arcaidSDK.stats.trackEvent(eventName, eventData);
+    console.log('Event tracked:', eventName, eventData);
+  } catch (error) {
+    console.error('Failed to track event:', error);
+  }
+}
+```
+
+### Common Event Types
+
+Here are some common game events you might want to track:
+
+```typescript
+// Game session events
+trackGameEvent('game_start', {
+  gameMode: 'multiplayer',
+  roomId: 'room123',
+  playerCount: 4
+});
+
+// Player actions
+trackGameEvent('player_action', {
+  action: 'jump',
+  position: { x: 100, y: 200 },
+  timestamp: Date.now()
+});
+
+// Game outcomes
+trackGameEvent('game_end', {
+  winner: 'player123',
+  duration: 300,
+  score: 1000
+});
+
+// Economy events
+trackGameEvent('item_purchase', {
+  itemId: 'powerup_123',
+  price: 100,
+  currency: 'coins'
+});
+```
+
+## Integration Examples
+
+### Game Analytics Manager
+
+Here's a comprehensive example of tracking game analytics:
+
+```typescript
+class GameAnalytics {
+  private sdk: ArcaidSDKInstance;
+  private sessionId: string;
+  private gameStartTime: number;
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+    this.sessionId = this.generateSessionId();
+    this.gameStartTime = Date.now();
+  }
+  
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  async trackGameStart(gameMode: string, roomId?: string) {
+    await this.sdk.stats.trackEvent('game_start', {
+      sessionId: this.sessionId,
+      gameMode,
+      roomId,
+      timestamp: Date.now()
+    });
+  }
+  
+  async trackPlayerAction(action: string, data: any) {
+    await this.sdk.stats.trackEvent('player_action', {
+      sessionId: this.sessionId,
+      action,
+      ...data,
+      timestamp: Date.now()
+    });
+  }
+  
+  async trackGameEnd(result: any) {
+    const duration = Date.now() - this.gameStartTime;
+    
+    await this.sdk.stats.trackEvent('game_end', {
+      sessionId: this.sessionId,
+      duration,
+      ...result,
+      timestamp: Date.now()
+    });
+  }
+  
+  async trackError(error: Error) {
+    await this.sdk.stats.trackEvent('error', {
+      sessionId: this.sessionId,
+      error: error.message,
+      stack: error.stack,
+      timestamp: Date.now()
+    });
+  }
+}
+```
+
+### Multiplayer Game Integration
+
+Here's how to integrate stats tracking with multiplayer functionality:
+
+```typescript
+class MultiplayerStats {
+  private analytics: GameAnalytics;
+  private roomId: string;
+  
+  constructor(sdk: ArcaidSDKInstance, roomId: string) {
+    this.analytics = new GameAnalytics(sdk);
+    this.roomId = roomId;
+  }
+  
+  async setupTracking() {
+    // Track game start
+    await this.analytics.trackGameStart('multiplayer', this.roomId);
+    
+    // Track player actions
+    arcaidSDK.multiplayer.onMessage('*', async ({ type, data }) => {
+      await this.analytics.trackPlayerAction(type, data);
+    });
+    
+    // Track game end
+    arcaidSDK.multiplayer.onGameFinished(async (payload) => {
+      await this.analytics.trackGameEnd(payload.results);
+    });
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Event Naming">
+    - Use consistent naming conventions
+    - Keep names descriptive but concise
+    - Use snake_case for event names
+    - Group related events with prefixes
+  </Accordion>
+  
+  <Accordion title="Data Structure">
+    - Include timestamp with events
+    - Add session/user identifiers
+    - Keep data payload focused
+    - Validate data before sending
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    - Implement retry logic for failed events
+    - Log tracking failures appropriately
+    - Don't block game flow on tracking
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example
+
+Here's a complete stats tracking implementation:
+
+<CodeGroup>
+```typescript game-stats.ts
+import type { ArcaidSDKInstance } from '@arcaid/sdk';
+
+interface GameEvent {
+  name: string;
+  data: Record<string, any>;
+  timestamp: number;
+}
+
+class GameStatsManager {
+  private sdk: ArcaidSDKInstance;
+  private sessionId: string;
+  private eventQueue: GameEvent[] = [];
+  private isProcessing: boolean = false;
+  private retryCount: number = 3;
+  private retryDelay: number = 1000;
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+    this.sessionId = this.generateSessionId();
+    this.processQueue = this.processQueue.bind(this);
+  }
+  
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  async trackEvent(name: string, data: Record<string, any> = {}) {
+    const event: GameEvent = {
+      name,
+      data: {
+        ...data,
+        sessionId: this.sessionId
+      },
+      timestamp: Date.now()
+    };
+    
+    this.eventQueue.push(event);
+    
+    if (!this.isProcessing) {
+      await this.processQueue();
+    }
+  }
+  
+  private async processQueue() {
+    if (this.isProcessing || this.eventQueue.length === 0) {
+      return;
+    }
+    
+    this.isProcessing = true;
+    
+    while (this.eventQueue.length > 0) {
+      const event = this.eventQueue[0];
+      
+      try {
+        await this.sendEventWithRetry(event);
+        this.eventQueue.shift(); // Remove sent event
+      } catch (error) {
+        console.error('Failed to send event after retries:', error);
+        // Keep event in queue for next attempt
+        break;
+      }
+    }
+    
+    this.isProcessing = false;
+  }
+  
+  private async sendEventWithRetry(event: GameEvent, attempt: number = 1): Promise<void> {
+    try {
+      await this.sdk.stats.trackEvent(event.name, event.data);
+    } catch (error) {
+      if (attempt < this.retryCount) {
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
+        return this.sendEventWithRetry(event, attempt + 1);
+      }
+      throw error;
+    }
+  }
+  
+  // Predefined event trackers
+  async trackGameStart(gameMode: string, options: Record<string, any> = {}) {
+    await this.trackEvent('game_start', {
+      gameMode,
+      ...options
+    });
+  }
+  
+  async trackGameEnd(result: Record<string, any>) {
+    await this.trackEvent('game_end', result);
+  }
+  
+  async trackPlayerAction(action: string, details: Record<string, any> = {}) {
+    await this.trackEvent('player_action', {
+      action,
+      ...details
+    });
+  }
+  
+  async trackError(error: Error) {
+    await this.trackEvent('error', {
+      message: error.message,
+      stack: error.stack
+    });
+  }
+  
+  async trackTransaction(type: string, amount: number, details: Record<string, any> = {}) {
+    await this.trackEvent('transaction', {
+      type,
+      amount,
+      ...details
+    });
+  }
+}
+
+// Usage
+const statsManager = new GameStatsManager(arcaidSDK);
+
+// Track game start
+await statsManager.trackGameStart('multiplayer', {
+  roomId: 'room123',
+  difficulty: 'hard'
+});
+
+// Track player action
+await statsManager.trackPlayerAction('jump', {
+  position: { x: 100, y: 200 },
+  powerup: 'double_jump'
+});
+
+// Track transaction
+await statsManager.trackTransaction('bet_placed', 100, {
+  roomId: 'room123',
+  odds: 2.5
+});
+
+// Track game end
+await statsManager.trackGameEnd({
+  winner: 'player123',
+  score: 1000,
+  duration: 300
+});
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multiplayer" icon="users" href="/api-reference/multiplayer">
+    Learn how to implement multiplayer features
+  </Card>
+  <Card title="Examples" icon="code" href="/api-reference/examples/stats">
+    See more stats tracking examples
+  </Card>
+</CardGroup> 

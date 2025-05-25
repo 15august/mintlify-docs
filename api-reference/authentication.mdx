@@ -1,0 +1,304 @@
+# Authentication
+
+The ARCAID SDK provides a comprehensive authentication system that handles user identity, session management, and player data access.
+
+## Overview
+
+The authentication module (`auth`) provides methods to:
+- Check user login status
+- Access player information
+- Handle authentication state changes
+
+## User State
+
+The basic user state contains login status and basic user information:
+
+```typescript
+interface ArcaidUserState {
+  isLoggedIn: boolean;
+  userId: string | null;
+  username: string | null;
+}
+```
+
+### Checking Authentication Status
+
+```typescript
+async function checkAuth() {
+  const userState = await arcaidSDK.auth.getUserState();
+  
+  if (userState.isLoggedIn) {
+    console.log(`Logged in as ${userState.username}`);
+    return true;
+  } else {
+    console.log('User not logged in');
+    return false;
+  }
+}
+```
+
+## Player Information
+
+The `getPlayer()` method provides detailed player information:
+
+```typescript
+interface ArcaidPlayerResponse {
+  auth: boolean;
+  user?: ArcaidPlayerUser;
+  currentLobby?: ArcaidPlayerLobby | null;
+  balance?: ArcaidPlayerBalance;
+}
+```
+
+### Fetching Player Data
+
+```typescript
+async function getPlayerInfo() {
+  try {
+    const playerData = await arcaidSDK.auth.getPlayer();
+    
+    if (playerData.auth) {
+      console.log('Player data:', {
+        userId: playerData.user?.id,
+        currentLobby: playerData.currentLobby?.name,
+        balance: playerData.balance?.tokenBalance
+      });
+      return playerData;
+    } else {
+      throw new Error('Player not authenticated');
+    }
+  } catch (error) {
+    console.error('Failed to fetch player info:', error);
+    throw error;
+  }
+}
+```
+
+## Linked Accounts
+
+Players can have multiple linked accounts:
+
+```typescript
+interface ArcaidPlayerLinkedAccount {
+  address: string;
+  type: string;
+  chainType: string;
+  walletClientType: string;
+  connectorType: string;
+  verifiedAt: string;
+  // ... other fields
+}
+```
+
+### Accessing Linked Accounts
+
+```typescript
+async function getLinkedAccounts() {
+  const player = await arcaidSDK.auth.getPlayer();
+  
+  if (player.user?.linkedAccounts) {
+    return player.user.linkedAccounts.map(account => ({
+      address: account.address,
+      type: account.type,
+      chainType: account.chainType
+    }));
+  }
+  
+  return [];
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Authentication Flow">
+    1. Check auth status on initialization
+    2. Set up state change listeners
+    3. Handle authentication errors
+    4. Implement reconnection logic
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    ```typescript
+    try {
+      const player = await arcaidSDK.auth.getPlayer();
+      // Handle success
+    } catch (error) {
+      if (error.code === 'AUTH_REQUIRED') {
+        // Redirect to login
+      } else if (error.code === 'SESSION_EXPIRED') {
+        // Handle session expiration
+      } else {
+        // Handle other errors
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Security Considerations">
+    - Always verify authentication state before accessing protected features
+    - Don't store sensitive user data in client-side storage
+    - Use the SDK's built-in security features
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example
+
+Here's a complete authentication management example:
+
+<CodeGroup>
+```typescript auth-manager.ts
+import type { 
+  ArcaidSDKInstance,
+  ArcaidUserState,
+  ArcaidPlayerResponse
+} from '@arcaid/sdk';
+
+class AuthManager {
+  private sdk: ArcaidSDKInstance;
+  private authState: ArcaidUserState | null = null;
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+  }
+  
+  async initialize() {
+    try {
+      // Wait for SDK to be ready
+      await this.sdk.ready();
+      
+      // Get initial auth state
+      this.authState = await this.sdk.auth.getUserState();
+      
+      if (this.authState.isLoggedIn) {
+        await this.loadPlayerData();
+      }
+      
+      return this.authState;
+    } catch (error) {
+      console.error('Auth initialization failed:', error);
+      throw error;
+    }
+  }
+  
+  async loadPlayerData(): Promise<ArcaidPlayerResponse> {
+    try {
+      const playerData = await this.sdk.auth.getPlayer();
+      
+      if (!playerData.auth) {
+        throw new Error('Failed to load player data');
+      }
+      
+      // Process linked accounts
+      const linkedAccounts = playerData.user?.linkedAccounts || [];
+      console.log('Linked accounts:', linkedAccounts.length);
+      
+      // Check current lobby
+      if (playerData.currentLobby) {
+        console.log('Player in lobby:', playerData.currentLobby.name);
+      }
+      
+      return playerData;
+    } catch (error) {
+      console.error('Failed to load player data:', error);
+      throw error;
+    }
+  }
+  
+  isAuthenticated(): boolean {
+    return this.authState?.isLoggedIn || false;
+  }
+  
+  getCurrentUserId(): string | null {
+    return this.authState?.userId || null;
+  }
+  
+  async refreshAuthState() {
+    this.authState = await this.sdk.auth.getUserState();
+    return this.authState;
+  }
+}
+
+// Usage
+const authManager = new AuthManager(arcaidSDK);
+authManager.initialize()
+  .then(() => {
+    if (authManager.isAuthenticated()) {
+      console.log('User authenticated:', authManager.getCurrentUserId());
+    } else {
+      console.log('User not authenticated');
+    }
+  })
+  .catch(error => {
+    console.error('Authentication failed:', error);
+  });
+```
+</CodeGroup>
+
+## API Reference
+
+### Methods
+
+<ResponseField name="getUserState" type="function">
+  Returns the current user's authentication state.
+  
+  ```typescript
+  async function getUserState(): Promise<ArcaidUserState>
+  ```
+</ResponseField>
+
+<ResponseField name="getPlayer" type="function">
+  Returns detailed player information including linked accounts and current lobby.
+  
+  ```typescript
+  async function getPlayer(): Promise<ArcaidPlayerResponse>
+  ```
+</ResponseField>
+
+### Types
+
+<ResponseField name="ArcaidUserState" type="object">
+  Basic user authentication state.
+  
+  <Expandable title="Properties">
+    <ResponseField name="isLoggedIn" type="boolean">
+      Whether the user is currently logged in
+    </ResponseField>
+    <ResponseField name="userId" type="string | null">
+      The user's unique identifier
+    </ResponseField>
+    <ResponseField name="username" type="string | null">
+      The user's display name
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="ArcaidPlayerResponse" type="object">
+  Detailed player information.
+  
+  <Expandable title="Properties">
+    <ResponseField name="auth" type="boolean">
+      Authentication status
+    </ResponseField>
+    <ResponseField name="user" type="ArcaidPlayerUser">
+      User details and linked accounts
+    </ResponseField>
+    <ResponseField name="currentLobby" type="ArcaidPlayerLobby">
+      Current game lobby information
+    </ResponseField>
+    <ResponseField name="balance" type="ArcaidPlayerBalance">
+      Player's token balance
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multiplayer" icon="users" href="/api-reference/multiplayer">
+    Learn how to implement multiplayer features
+  </Card>
+  <Card title="Wallet Integration" icon="wallet" href="/api-reference/wallet">
+    Integrate with player wallets
+  </Card>
+</CardGroup> 

@@ -1,0 +1,284 @@
+# Wallet
+
+The wallet module provides functionality to interact with player balances and token information.
+
+<Warning>
+  **Beta Feature**
+  
+  The wallet module is in beta. Features and interfaces might be adjusted based on developer feedback. Join our [Telegram](https://t.me/arcaidxyz) for direct support and updates.
+</Warning>
+
+## Balance Management
+
+### Getting User Balance
+
+```typescript
+async function checkBalance() {
+  try {
+    const balance = await arcaidSDK.wallet.getUserBalance();
+    console.log('Player balance:', {
+      amount: balance.balance,
+      token: balance.ticker,
+      address: balance.tokenAddress
+    });
+    return balance;
+  } catch (error) {
+    console.error('Failed to fetch balance:', error);
+    throw error;
+  }
+}
+```
+
+### Balance Response
+
+The balance response includes token information:
+
+```typescript
+interface ArcaidUserBalanceResponsePayload {
+  balance: string;
+  ticker: string;
+  tokenAddress: string;
+  error?: string; // Optional error field
+}
+```
+
+## Integration with Betting
+
+Here's how to integrate wallet functionality with the betting system:
+
+```typescript
+class WalletManager {
+  private sdk: ArcaidSDKInstance;
+  private minimumBalance: number;
+  
+  constructor(sdk: ArcaidSDKInstance, minimumBalance: number = 0) {
+    this.sdk = sdk;
+    this.minimumBalance = minimumBalance;
+  }
+  
+  async validateBalance(requiredAmount: number): Promise<boolean> {
+    try {
+      const balance = await this.sdk.wallet.getUserBalance();
+      const currentBalance = parseFloat(balance.balance);
+      
+      return currentBalance >= requiredAmount;
+    } catch (error) {
+      console.error('Balance validation failed:', error);
+      return false;
+    }
+  }
+  
+  async checkAndNotifyLowBalance(): Promise<void> {
+    try {
+      const balance = await this.sdk.wallet.getUserBalance();
+      const currentBalance = parseFloat(balance.balance);
+      
+      if (currentBalance < this.minimumBalance) {
+        this.notifyLowBalance(currentBalance, balance.ticker);
+      }
+    } catch (error) {
+      console.error('Balance check failed:', error);
+    }
+  }
+  
+  private notifyLowBalance(balance: number, ticker: string) {
+    console.warn(`Low balance warning: ${balance} ${ticker}`);
+    // Implement your notification logic here
+  }
+}
+```
+
+## Error Handling
+
+Common wallet-related errors and how to handle them:
+
+<AccordionGroup>
+  <Accordion title="Balance Fetch Failed">
+    ```typescript
+    try {
+      const balance = await arcaidSDK.wallet.getUserBalance();
+    } catch (error) {
+      if (error.message.includes('network error')) {
+        // Retry with exponential backoff
+        await retryWithBackoff(() => arcaidSDK.wallet.getUserBalance());
+      } else {
+        // Handle other errors
+        console.error('Balance fetch failed:', error);
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Invalid Token">
+    ```typescript
+    try {
+      const balance = await arcaidSDK.wallet.getUserBalance();
+      if (!isValidToken(balance.tokenAddress)) {
+        throw new Error('Invalid token address');
+      }
+    } catch (error) {
+      // Handle token validation errors
+      console.error('Token validation failed:', error);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Regular Balance Updates">
+    Implement periodic balance checks to keep UI in sync
+  </Step>
+  <Step title="Error Recovery">
+    Handle network issues and invalid states gracefully
+  </Step>
+  <Step title="User Feedback">
+    Keep users informed about their balance status
+  </Step>
+  <Step title="Validation">
+    Always validate balance before operations
+  </Step>
+</Steps>
+
+## Complete Example
+
+Here's a complete wallet management implementation:
+
+<CodeGroup>
+```typescript wallet-manager.ts
+import type {
+  ArcaidSDKInstance,
+  ArcaidUserBalanceResponsePayload
+} from '@arcaid/sdk';
+
+class WalletManager {
+  private sdk: ArcaidSDKInstance;
+  private lastBalance: ArcaidUserBalanceResponsePayload | null = null;
+  private updateInterval: number = 30000; // 30 seconds
+  private intervalId: NodeJS.Timeout | null = null;
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+  }
+  
+  async initialize() {
+    try {
+      // Get initial balance
+      await this.updateBalance();
+      
+      // Start periodic updates
+      this.startBalanceUpdates();
+      
+      return this.lastBalance;
+    } catch (error) {
+      console.error('Wallet initialization failed:', error);
+      throw error;
+    }
+  }
+  
+  private async updateBalance() {
+    try {
+      this.lastBalance = await this.sdk.wallet.getUserBalance();
+      this.emitBalanceUpdate(this.lastBalance);
+    } catch (error) {
+      console.error('Balance update failed:', error);
+      throw error;
+    }
+  }
+  
+  private startBalanceUpdates() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+    
+    this.intervalId = setInterval(async () => {
+      try {
+        await this.updateBalance();
+      } catch (error) {
+        console.error('Periodic balance update failed:', error);
+      }
+    }, this.updateInterval);
+  }
+  
+  async validateBalanceForBet(betAmount: number): Promise<boolean> {
+    try {
+      const balance = await this.sdk.wallet.getUserBalance();
+      const currentBalance = parseFloat(balance.balance);
+      
+      if (currentBalance < betAmount) {
+        this.emitInsufficientBalance(betAmount, currentBalance);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Balance validation failed:', error);
+      return false;
+    }
+  }
+  
+  getCurrentBalance(): ArcaidUserBalanceResponsePayload | null {
+    return this.lastBalance;
+  }
+  
+  private emitBalanceUpdate(balance: ArcaidUserBalanceResponsePayload) {
+    // Implement your event emission logic
+    console.log('Balance updated:', balance);
+  }
+  
+  private emitInsufficientBalance(required: number, current: number) {
+    // Implement your event emission logic
+    console.warn('Insufficient balance:', {
+      required,
+      current,
+      missing: required - current
+    });
+  }
+  
+  cleanup() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+  }
+}
+
+// Usage
+const walletManager = new WalletManager(arcaidSDK);
+
+// Initialize wallet management
+walletManager.initialize()
+  .then(balance => {
+    console.log('Wallet initialized:', balance);
+  })
+  .catch(error => {
+    console.error('Wallet initialization failed:', error);
+  });
+
+// Validate balance before betting
+async function tryPlaceBet(amount: number) {
+  const isValid = await walletManager.validateBalanceForBet(amount);
+  if (isValid) {
+    // Proceed with bet
+    console.log('Balance sufficient for bet');
+  } else {
+    console.log('Insufficient balance for bet');
+  }
+}
+
+// Cleanup when done
+walletManager.cleanup();
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Payments" icon="credit-card" href="/api-reference/payments">
+    Learn how to implement betting functionality
+  </Card>
+  <Card title="Examples" icon="code" href="/api-reference/examples/wallet-integration">
+    See more wallet integration examples
+  </Card>
+</CardGroup> 

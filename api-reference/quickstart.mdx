@@ -1,0 +1,235 @@
+# Quickstart Guide
+
+This guide will help you get started with the ARCAID SDK by walking through common use cases and basic functionality.
+
+## Basic Setup
+
+First, add the ARCAID SDK to your HTML file:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My ARCAID Game</title>
+  <script src="https://cdn.arcaid.xyz/sdk/latest/arcaid-loader.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script src="game.js"></script>
+</body>
+</html>
+```
+
+## Initialize the SDK
+
+In your game's entry point (e.g., `game.js`):
+
+```typescript
+let arcaidSDK;
+
+async function initGame() {
+  try {
+    // Initialize the SDK
+    arcaidSDK = await window.Arcaid.init();
+    await arcaidSDK.ready();
+    
+    // Check if user is logged in
+    const userState = await arcaidSDK.auth.getUserState();
+    if (userState.isLoggedIn) {
+      console.log(`Welcome back, ${userState.username}!`);
+      await startGame();
+    } else {
+      console.log('Please log in to play');
+      showLoginPrompt();
+    }
+  } catch (error) {
+    console.error('Failed to initialize game:', error);
+  }
+}
+
+// Start initialization when the page loads
+window.addEventListener('load', initGame);
+```
+
+## Common Tasks
+
+### Check Player Balance
+
+```typescript
+async function checkBalance() {
+  try {
+    const balance = await arcaidSDK.wallet.getUserBalance();
+    console.log(`Current balance: ${balance.balance} ${balance.ticker}`);
+    return balance;
+  } catch (error) {
+    console.error('Failed to fetch balance:', error);
+    return null;
+  }
+}
+```
+
+### Join a Multiplayer Room
+
+```typescript
+async function joinGame(roomId) {
+  try {
+    // Join the room
+    const room = await arcaidSDK.multiplayer.joinRoom(roomId);
+    
+    // Listen for room updates
+    arcaidSDK.multiplayer.onRoomUpdate((update) => {
+      console.log('Room updated:', update);
+      updateGameUI(update);
+    });
+    
+    // Listen for game start
+    arcaidSDK.multiplayer.onGameStarted((payload) => {
+      console.log('Game started!', payload);
+      startGameplay(payload.initialState);
+    });
+    
+    return room;
+  } catch (error) {
+    console.error('Failed to join room:', error);
+    throw error;
+  }
+}
+```
+
+### Place a Bet
+
+```typescript
+async function placeBet(roomId, amount) {
+  try {
+    const betResponse = await arcaidSDK.payments.makeBet(roomId, amount);
+    if (betResponse.success) {
+      console.log('Bet placed successfully!', betResponse.paymentId);
+      return betResponse;
+    } else {
+      throw new Error(betResponse.error || 'Failed to place bet');
+    }
+  } catch (error) {
+    console.error('Bet error:', error);
+    throw error;
+  }
+}
+```
+
+## Complete Example
+
+Here's a complete example combining multiple features:
+
+<CodeGroup>
+```typescript game.ts
+import type { 
+  ArcaidSDKInstance, 
+  ArcaidRoomDetails,
+  ArcaidRoomUpdatePayload 
+} from '@arcaid/sdk';
+
+class Game {
+  private sdk: ArcaidSDKInstance;
+  private currentRoom: ArcaidRoomDetails | null = null;
+  
+  async initialize() {
+    // Initialize SDK
+    this.sdk = await window.Arcaid.init();
+    await this.sdk.ready();
+    
+    // Set up event listeners
+    this.setupEventListeners();
+    
+    // Check authentication
+    const userState = await this.sdk.auth.getUserState();
+    if (!userState.isLoggedIn) {
+      throw new Error('Please log in to play');
+    }
+    
+    // Get available rooms
+    const rooms = await this.sdk.multiplayer.getAvailableRooms();
+    return rooms;
+  }
+  
+  private setupEventListeners() {
+    // Room updates
+    this.sdk.multiplayer.onRoomUpdate((update: ArcaidRoomUpdatePayload) => {
+      this.handleRoomUpdate(update);
+    });
+    
+    // Game start
+    this.sdk.multiplayer.onGameStarted((payload) => {
+      this.startGame(payload);
+    });
+    
+    // Game finish
+    this.sdk.multiplayer.onGameFinished((payload) => {
+      this.handleGameEnd(payload);
+    });
+  }
+  
+  async joinRoom(roomId: string) {
+    this.currentRoom = await this.sdk.multiplayer.joinRoom(roomId);
+    return this.currentRoom;
+  }
+  
+  async placeBet(amount: number) {
+    if (!this.currentRoom) {
+      throw new Error('Not in a room');
+    }
+    
+    return await this.sdk.payments.makeBet(
+      this.currentRoom.roomId,
+      amount
+    );
+  }
+  
+  private handleRoomUpdate(update: ArcaidRoomUpdatePayload) {
+    // Update game state based on room update
+    this.updateUI(update);
+  }
+  
+  private startGame(payload: any) {
+    // Initialize game with payload
+    this.initializeGameState(payload.initialState);
+  }
+  
+  private handleGameEnd(payload: any) {
+    // Handle game end, show results
+    this.showResults(payload.results);
+  }
+}
+
+// Usage
+const game = new Game();
+game.initialize()
+  .then((rooms) => {
+    console.log('Available rooms:', rooms);
+  })
+  .catch((error) => {
+    console.error('Game initialization failed:', error);
+  });
+```
+</CodeGroup>
+
+## Next Steps
+
+Now that you have a basic understanding of the SDK, explore these topics:
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/api-reference/authentication">
+    Learn more about user authentication
+  </Card>
+  <Card title="Multiplayer" icon="users" href="/api-reference/multiplayer">
+    Deep dive into multiplayer features
+  </Card>
+  <Card title="Payments" icon="credit-card" href="/api-reference/payments">
+    Implement betting and payments
+  </Card>
+  <Card title="Examples" icon="code" href="/api-reference/examples/multiplayer-room">
+    See more code examples
+  </Card>
+</CardGroup>
+
+<Note>
+  Remember to handle errors appropriately in your production code. The examples above show basic error handling for clarity.
+</Note> 

@@ -1,0 +1,118 @@
+# ARCAID SDK Overview
+
+<Warning>
+  **Beta Release Notice**
+  
+  The ARCAID SDK is currently in beta. We are actively developing and improving the SDK, which means:
+  - Some TypeScript types might be missing or need updates
+  - You may encounter bugs or unexpected behavior
+  - API interfaces might change as we optimize the SDK
+  
+  For immediate support and quick answers to your questions, please join our [Developer Support Telegram](https://t.me/arcaidxyz). Our team is ready to help you with any issues or concerns.
+</Warning>
+
+The ARCAID SDK enables game developers to seamlessly integrate their games with the ARCAID platform, providing features like authentication, multiplayer capabilities, payments, and wallet integration. The SDK is designed to work within iframes, similar to platforms like Yandex Games, Crazy Games, and itch.io.
+
+## Game Engine Support
+
+<Note>
+  **Coming Soon: Native Game Engine SDKs**
+  
+  While our current SDK is designed for web-based games, we are actively developing native SDK support for popular game engines:
+  - Unity SDK (Coming Soon)
+  - Unreal Engine SDK (Planned)
+  - Godot SDK (Planned)
+  
+  Follow our [Telegram channel](https://t.me/arcaidxyz) for updates on native SDK releases.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="user-check">
+    Manage player authentication and retrieve user information seamlessly.
+  </Card>
+  <Card title="Multiplayer" icon="users">
+    Create and manage multiplayer game rooms with real-time communication.
+  </Card>
+  <Card title="Payments" icon="credit-card">
+    Handle in-game transactions and bets securely through the platform.
+  </Card>
+  <Card title="Wallet Integration" icon="wallet">
+    Access player balances and manage crypto wallet interactions.
+  </Card>
+</CardGroup>
+
+## Quick Integration
+
+Add the ARCAID SDK to your game with just a few lines of code:
+
+```html
+<script src="https://cdn.arcaid.xyz/sdk/latest/arcaid-loader.js"></script>
+<script>
+  // Initialize the SDK
+  const arcaid = await window.Arcaid.init();
+  
+  // Wait for the SDK to be ready
+  await arcaid.ready();
+  
+  // Start using SDK features
+  const userState = await arcaid.auth.getUserState();
+  console.log('User logged in:', userState.isLoggedIn);
+</script>
+```
+
+## SDK Modules
+
+The ARCAID SDK is organized into several modules, each handling specific functionality:
+
+<Steps>
+  <Step title="Auth Module">
+    Handle user authentication and retrieve player information
+  </Step>
+  <Step title="Multiplayer Module">
+    Create and manage game rooms, handle real-time communication
+  </Step>
+  <Step title="Payments Module">
+    Process in-game transactions and handle betting functionality
+  </Step>
+  <Step title="Wallet Module">
+    Access player balances and manage token interactions
+  </Step>
+  <Step title="Stats Module">
+    Track game events and player statistics
+  </Step>
+  <Step title="Utils Module">
+    Access utility functions for common operations
+  </Step>
+</Steps>
+
+## TypeScript Support
+
+The SDK comes with full TypeScript support out of the box. All interfaces and types are properly defined, providing excellent IDE integration and type safety.
+
+```typescript
+import { ArcaidSDKInstance, ArcaidUserState } from '@arcaid/sdk';
+
+async function checkUserStatus(sdk: ArcaidSDKInstance) {
+  const userState: ArcaidUserState = await sdk.auth.getUserState();
+  return userState.isLoggedIn;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/api-reference/installation">
+    Learn how to install and set up the SDK in your game
+  </Card>
+  <Card title="Quickstart" icon="play" href="/api-reference/quickstart">
+    Get started with basic SDK usage examples
+  </Card>
+  <Card title="Authentication" icon="lock" href="/api-reference/authentication">
+    Learn about user authentication and player management
+  </Card>
+  <Card title="Multiplayer" icon="network-wired" href="/api-reference/multiplayer">
+    Explore multiplayer room management and real-time features
+  </Card>
+</CardGroup> 

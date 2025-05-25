@@ -1,0 +1,390 @@
+# Multiplayer
+
+The multiplayer module provides comprehensive functionality for creating and managing multiplayer game rooms, handling real-time communication, and managing game state.
+
+<Warning>
+  **Beta Feature**
+  
+  The multiplayer module is in beta. Some features might be adjusted based on developer feedback. Join our [Telegram](https://t.me/arcaidxyz) for direct support and updates.
+</Warning>
+
+## Room Management
+
+### Creating a Room
+
+```typescript
+async function createGameRoom() {
+  try {
+    const options = {
+      name: "My Game Room",
+      maxPlayers: 4,
+      betAmount: 100,
+      duration: 300 // 5 minutes
+    };
+    
+    const room = await arcaidSDK.multiplayer.createRoom("game_type", options);
+    console.log("Room created:", room.roomId);
+    return room;
+  } catch (error) {
+    console.error("Failed to create room:", error);
+    throw error;
+  }
+}
+```
+
+### Joining a Room
+
+```typescript
+async function joinGameRoom(roomId: string) {
+  try {
+    const room = await arcaidSDK.multiplayer.joinRoom(roomId);
+    console.log("Joined room:", room.roomId);
+    return room;
+  } catch (error) {
+    console.error("Failed to join room:", error);
+    throw error;
+  }
+}
+```
+
+### Finding Available Rooms
+
+```typescript
+async function listAvailableRooms() {
+  try {
+    const rooms = await arcaidSDK.multiplayer.getAvailableRooms();
+    console.log("Available rooms:", rooms.length);
+    return rooms;
+  } catch (error) {
+    console.error("Failed to list rooms:", error);
+    throw error;
+  }
+}
+```
+
+## Real-time Communication
+
+### Room Updates
+
+Listen for changes in room state:
+
+```typescript
+const unsubscribe = arcaidSDK.multiplayer.onRoomUpdate((update) => {
+  console.log("Room updated:", {
+    players: update.players.length,
+    timeLeft: update.timeLeft,
+    gameStarted: update.gameStarted,
+    bets: update.bets
+  });
+  
+  // Update your game UI
+  updateGameState(update);
+});
+
+// Later: cleanup listener
+unsubscribe();
+```
+
+### Game Messages
+
+Send and receive game-specific messages:
+
+```typescript
+// Send a message
+arcaidSDK.multiplayer.send("PLAYER_MOVE", {
+  x: 100,
+  y: 200,
+  action: "jump"
+});
+
+// Listen for specific message type
+const unsubscribe = arcaidSDK.multiplayer.onMessage("PLAYER_MOVE", (data) => {
+  handlePlayerMove(data);
+});
+
+// Listen for all messages
+const unsubscribeAll = arcaidSDK.multiplayer.onMessage("*", ({ type, data }) => {
+  console.log(`Received message type: ${type}`, data);
+});
+```
+
+## Game Lifecycle
+
+### Starting a Game
+
+```typescript
+async function startGame() {
+  try {
+    await arcaidSDK.multiplayer.startGame();
+    console.log("Game started!");
+  } catch (error) {
+    console.error("Failed to start game:", error);
+    throw error;
+  }
+}
+
+// Listen for game start
+arcaidSDK.multiplayer.onGameStarted((payload) => {
+  console.log("Game started with initial state:", payload.initialState);
+  initializeGameState(payload.initialState);
+});
+```
+
+### Game Completion
+
+```typescript
+// Listen for game finish
+arcaidSDK.multiplayer.onGameFinished((payload) => {
+  console.log("Game finished with results:", payload.results);
+  showGameResults(payload.results);
+});
+```
+
+### Error Handling
+
+```typescript
+arcaidSDK.multiplayer.onRoomError((error) => {
+  console.error("Room error:", error.message);
+  if (error.code === /* specific error code */) {
+    handleSpecificError();
+  }
+});
+```
+
+## Types Reference
+
+### Room Details
+
+```typescript
+interface ArcaidRoomDetails {
+  roomId: string;
+  name?: string;
+  metadata?: any;
+  sessionId?: string; // Player's session ID within the room
+}
+```
+
+### Available Room
+
+```typescript
+interface ArcaidAvailableRoom {
+  roomId: string;
+  name: string;
+  clients: number;
+  locked: boolean;
+  private: boolean;
+  maxClients: number | null;
+  unlisted: boolean;
+  createdAt: string;
+  processId: string;
+  metadata: {
+    roomName: string;
+    duration: number;
+    maxPlayers: number;
+    betAmount: number;
+    gameId: string;
+    roomDocId: string;
+    [key: string]: any;
+  };
+}
+```
+
+### Room Update Payload
+
+```typescript
+interface ArcaidRoomUpdatePayload {
+  roomName: string;
+  players: ArcaidRoomPlayer[];
+  timeLeft: number;
+  gameStarted: boolean;
+  gameFinished: boolean;
+  maxPlayers: number;
+  betAmount: number;
+  roomId: string;
+  gameId: string;
+  hostUserId: string;
+  roomDocId: string;
+  bets: ArcaidRoomBet[];
+}
+```
+
+## Complete Example
+
+Here's a complete example showing how to implement multiplayer functionality:
+
+<CodeGroup>
+```typescript multiplayer-manager.ts
+import type {
+  ArcaidSDKInstance,
+  ArcaidRoomDetails,
+  ArcaidRoomUpdatePayload,
+  ArcaidGameStartedPayload,
+  ArcaidGameFinishedPayload
+} from '@arcaid/sdk';
+
+class MultiplayerManager {
+  private sdk: ArcaidSDKInstance;
+  private currentRoom: ArcaidRoomDetails | null = null;
+  private unsubscribers: (() => void)[] = [];
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+  }
+  
+  async createAndJoinRoom(options: any) {
+    try {
+      // Create a new room
+      this.currentRoom = await this.sdk.multiplayer.createRoom('game_type', options);
+      
+      // Set up event listeners
+      this.setupEventListeners();
+      
+      return this.currentRoom;
+    } catch (error) {
+      console.error('Failed to create and join room:', error);
+      throw error;
+    }
+  }
+  
+  async joinExistingRoom(roomId: string) {
+    try {
+      this.currentRoom = await this.sdk.multiplayer.joinRoom(roomId);
+      this.setupEventListeners();
+      return this.currentRoom;
+    } catch (error) {
+      console.error('Failed to join room:', error);
+      throw error;
+    }
+  }
+  
+  private setupEventListeners() {
+    // Clear existing listeners
+    this.cleanup();
+    
+    // Room updates
+    this.unsubscribers.push(
+      this.sdk.multiplayer.onRoomUpdate(this.handleRoomUpdate.bind(this))
+    );
+    
+    // Game lifecycle
+    this.unsubscribers.push(
+      this.sdk.multiplayer.onGameStarted(this.handleGameStart.bind(this))
+    );
+    
+    this.unsubscribers.push(
+      this.sdk.multiplayer.onGameFinished(this.handleGameEnd.bind(this))
+    );
+    
+    // Error handling
+    this.unsubscribers.push(
+      this.sdk.multiplayer.onRoomError(this.handleError.bind(this))
+    );
+    
+    // Game messages
+    this.unsubscribers.push(
+      this.sdk.multiplayer.onMessage('*', this.handleMessage.bind(this))
+    );
+  }
+  
+  private handleRoomUpdate(update: ArcaidRoomUpdatePayload) {
+    console.log('Room updated:', update);
+    // Update game state
+  }
+  
+  private handleGameStart(payload: ArcaidGameStartedPayload) {
+    console.log('Game started:', payload);
+    // Initialize game with payload.initialState
+  }
+  
+  private handleGameEnd(payload: ArcaidGameFinishedPayload) {
+    console.log('Game finished:', payload);
+    // Show results, cleanup, etc.
+  }
+  
+  private handleError(error: any) {
+    console.error('Room error:', error);
+    // Handle error appropriately
+  }
+  
+  private handleMessage({ type, data }: { type: string; data: any }) {
+    console.log(`Received message: ${type}`, data);
+    // Handle different message types
+  }
+  
+  sendGameMessage(type: string, data: any) {
+    if (!this.currentRoom) {
+      throw new Error('Not in a room');
+    }
+    this.sdk.multiplayer.send(type, data);
+  }
+  
+  async leaveRoom() {
+    if (this.currentRoom) {
+      await this.sdk.multiplayer.leaveRoom();
+      this.cleanup();
+      this.currentRoom = null;
+    }
+  }
+  
+  private cleanup() {
+    this.unsubscribers.forEach(unsubscribe => unsubscribe());
+    this.unsubscribers = [];
+  }
+}
+
+// Usage
+const multiplayerManager = new MultiplayerManager(arcaidSDK);
+
+// Create and join a room
+const room = await multiplayerManager.createAndJoinRoom({
+  name: 'My Game Room',
+  maxPlayers: 4,
+  betAmount: 100
+});
+
+// Send game messages
+multiplayerManager.sendGameMessage('PLAYER_MOVE', {
+  x: 100,
+  y: 200
+});
+
+// Cleanup when done
+await multiplayerManager.leaveRoom();
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Room Management">
+    - Always handle room cleanup when players leave
+    - Implement reconnection logic for disconnections
+    - Validate room existence before joining
+    - Handle room capacity limits
+  </Accordion>
+  
+  <Accordion title="Message Handling">
+    - Use specific message types for different game events
+    - Implement message validation
+    - Handle message ordering when needed
+    - Clean up message listeners when not needed
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    - Implement proper error recovery
+    - Handle network disconnections
+    - Provide feedback to players
+    - Log errors for debugging
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Payments" icon="credit-card" href="/api-reference/payments">
+    Learn how to implement betting functionality
+  </Card>
+  <Card title="Examples" icon="code" href="/api-reference/examples/multiplayer-room">
+    See more multiplayer examples
+  </Card>
+</CardGroup> 

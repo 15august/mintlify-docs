@@ -1,0 +1,289 @@
+# Payments
+
+The payments module handles all betting-related functionality in ARCAID games, providing a secure way to manage in-game transactions.
+
+<Warning>
+  **Beta Feature**
+  
+  The payments module is in beta. Features and interfaces might be adjusted based on developer feedback. Join our [Telegram](https://t.me/arcaidxyz) for direct support and updates.
+</Warning>
+
+## Betting System
+
+### Making a Bet
+
+```typescript
+async function placeBet(roomId: string, amount: number) {
+  try {
+    const response = await arcaidSDK.payments.makeBet(roomId, amount);
+    
+    if (response.success) {
+      console.log('Bet placed successfully!', {
+        paymentId: response.paymentId,
+        transactionHash: response.transactionHash
+      });
+      return response;
+    } else {
+      throw new Error(response.error || 'Failed to place bet');
+    }
+  } catch (error) {
+    console.error('Bet error:', error);
+    throw error;
+  }
+}
+```
+
+### Bet Response
+
+The bet response includes transaction details and status:
+
+```typescript
+interface ArcaidBetResponsePayload {
+  success: boolean;
+  paymentId?: string;
+  transactionHash?: string;
+  message?: string;
+  error?: string; // Error message if success is false
+}
+```
+
+## Integration with Multiplayer
+
+Here's how to integrate betting with multiplayer rooms:
+
+```typescript
+class GameBetting {
+  private sdk: ArcaidSDKInstance;
+  private currentRoom: ArcaidRoomDetails | null = null;
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+  }
+  
+  async joinRoomWithBet(roomId: string, betAmount: number) {
+    try {
+      // First join the room
+      this.currentRoom = await this.sdk.multiplayer.joinRoom(roomId);
+      
+      // Then place the bet
+      const betResponse = await this.sdk.payments.makeBet(
+        roomId,
+        betAmount,
+        'Room entry bet'
+      );
+      
+      if (!betResponse.success) {
+        // If bet fails, leave the room
+        await this.sdk.multiplayer.leaveRoom();
+        throw new Error(betResponse.error || 'Bet failed');
+      }
+      
+      return {
+        room: this.currentRoom,
+        bet: betResponse
+      };
+    } catch (error) {
+      console.error('Failed to join room with bet:', error);
+      throw error;
+    }
+  }
+  
+  // Monitor bets in the room
+  setupBetMonitoring() {
+    return this.sdk.multiplayer.onRoomUpdate((update) => {
+      const totalBets = update.bets.reduce(
+        (sum, bet) => sum + parseFloat(bet.amount),
+        0
+      );
+      
+      console.log('Current bets:', {
+        totalAmount: totalBets,
+        betCount: update.bets.length,
+        bets: update.bets
+      });
+    });
+  }
+}
+```
+
+## Error Handling
+
+Common betting errors and how to handle them:
+
+<AccordionGroup>
+  <Accordion title="Insufficient Balance">
+    ```typescript
+    try {
+      await placeBet(roomId, amount);
+    } catch (error) {
+      if (error.message.includes('insufficient balance')) {
+        // Show balance top-up prompt
+        showTopUpPrompt();
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Transaction Failed">
+    ```typescript
+    try {
+      await placeBet(roomId, amount);
+    } catch (error) {
+      if (error.message.includes('transaction failed')) {
+        // Retry logic
+        await retryBet(roomId, amount);
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Room Full/Closed">
+    ```typescript
+    try {
+      await placeBet(roomId, amount);
+    } catch (error) {
+      if (error.message.includes('room closed')) {
+        // Find another room
+        const rooms = await sdk.multiplayer.getAvailableRooms();
+        // ...
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Validate Before Betting">
+    Always check room status and player balance before attempting to place a bet
+  </Step>
+  <Step title="Handle Failures Gracefully">
+    Implement proper error handling and recovery mechanisms
+  </Step>
+  <Step title="Monitor Transactions">
+    Keep track of bet status and transaction hashes
+  </Step>
+  <Step title="User Feedback">
+    Provide clear feedback about bet status and any issues
+  </Step>
+</Steps>
+
+## Complete Example
+
+Here's a complete betting system implementation:
+
+<CodeGroup>
+```typescript betting-system.ts
+import type {
+  ArcaidSDKInstance,
+  ArcaidBetResponsePayload,
+  ArcaidRoomDetails
+} from '@arcaid/sdk';
+
+class BettingSystem {
+  private sdk: ArcaidSDKInstance;
+  private activeBets: Map<string, ArcaidBetResponsePayload> = new Map();
+  
+  constructor(sdk: ArcaidSDKInstance) {
+    this.sdk = sdk;
+  }
+  
+  async validateBet(roomId: string, amount: number): Promise<boolean> {
+    try {
+      // Check player balance
+      const balance = await this.sdk.wallet.getUserBalance();
+      if (parseFloat(balance.balance) < amount) {
+        throw new Error('Insufficient balance');
+      }
+      
+      // Verify room exists and is open
+      const rooms = await this.sdk.multiplayer.getAvailableRooms();
+      const room = rooms.find(r => r.roomId === roomId);
+      if (!room) {
+        throw new Error('Room not found');
+      }
+      
+      if (room.locked) {
+        throw new Error('Room is locked');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Bet validation failed:', error);
+      return false;
+    }
+  }
+  
+  async placeBet(roomId: string, amount: number): Promise<ArcaidBetResponsePayload> {
+    try {
+      // Validate first
+      const isValid = await this.validateBet(roomId, amount);
+      if (!isValid) {
+        throw new Error('Bet validation failed');
+      }
+      
+      // Place the bet
+      const response = await this.sdk.payments.makeBet(roomId, amount);
+      
+      if (response.success) {
+        // Store the bet
+        this.activeBets.set(response.paymentId!, response);
+        
+        // Set up monitoring
+        this.monitorBet(roomId, response.paymentId!);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Failed to place bet:', error);
+      throw error;
+    }
+  }
+  
+  private monitorBet(roomId: string, paymentId: string) {
+    const unsubscribe = this.sdk.multiplayer.onRoomUpdate((update) => {
+      const bet = update.bets.find(b => b.txHash === this.activeBets.get(paymentId)?.transactionHash);
+      
+      if (bet) {
+        console.log('Bet status updated:', bet);
+        // Handle bet status change
+      }
+      
+      if (update.gameFinished) {
+        unsubscribe();
+        this.activeBets.delete(paymentId);
+      }
+    });
+  }
+  
+  getActiveBets(): ArcaidBetResponsePayload[] {
+    return Array.from(this.activeBets.values());
+  }
+}
+
+// Usage
+const bettingSystem = new BettingSystem(arcaidSDK);
+
+try {
+  const betResponse = await bettingSystem.placeBet('room123', 100);
+  console.log('Bet placed:', betResponse);
+  
+  // Monitor active bets
+  console.log('Active bets:', bettingSystem.getActiveBets());
+} catch (error) {
+  console.error('Betting error:', error);
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Wallet Integration" icon="wallet" href="/api-reference/wallet">
+    Learn how to manage player balances
+  </Card>
+  <Card title="Examples" icon="code" href="/api-reference/examples/payments">
+    See more payment examples
+  </Card>
+</CardGroup> 
